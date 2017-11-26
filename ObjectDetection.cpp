@@ -22,13 +22,13 @@ using std::numeric_limits;
 
 using namespace std::chrono;
 using namespace cv;
-//using namespace arma;
+
+enum detectMode {off, search, lock, relock, debug};
 
 /** Function Headers */
 void detectAndDisplay( Mat frame );
 void detect (Mat frame);
 int initDisplay ();
-enum detectMode {off, search, lock, relock, debug};
 
 /** Global variables */
 String faceCascadeName, eyesCascadeName;
@@ -36,13 +36,14 @@ CascadeClassifier faceCascade;
 CascadeClassifier eyesCascade;
 String windowName = "Capture - Face detection";
 const double lockInterval = 1.5;
-const double permissibleRelockError = 200.0;
+const double permissibleRelockError = 100.0;
 detectMode mode = detectMode::search;
 VideoCapture capture;
 double timeSpentReading = 0.,timeSpentCascading = 0.;
 bool drawCascade = true;
-Timer modeTimer;
+Timer modeTimer, frameTimer;
 
+int frameCountThisSecond= 0;
 int lockFrames = 0;
 int lockFrameTwoEyes = 0;
 
@@ -85,14 +86,11 @@ int main( int argc, const char** argv )
 			break;
 	}
 
+	frameTimer.start (1.);
+
 	Mat frame;
-	time_point <system_clock> lastSecond = system_clock::now(), currentSecond;
-	system_clock::time_point timeBeforeRead = system_clock::now (), timeAfterRead;
 
 	for (;capture.read(frame); frameCount++) {
-		timeAfterRead = system_clock::now ();
-		duration <double>diff = timeAfterRead - timeBeforeRead;
-		timeSpentReading += diff.count ();
 
 		if(frame.empty() ) {
 			printf(" --(!) No captured frame -- Break!");
@@ -104,7 +102,7 @@ int main( int argc, const char** argv )
 		detectAndDisplay (frame);
 
 		// wprowadzanie komend poprzez klawiaturę
-		char c = (char)waitKey(10);
+		char c = (char)waitKey(1);
 		switch (c) {
 			case 'q':
 			case 27:
@@ -122,15 +120,12 @@ int main( int argc, const char** argv )
 				break;
 		}
 
-		if ((system_clock::now () -lastSecond).count () > 1.) {
-			lastSecond = currentSecond;
-//			cout << "This second " << frameCount << " frames, " << timeSpentReading<<
-//				"s used for read and " << timeSpentCascading <<
-//				"s used for cascade detection" << endl;
-			frameCount = 0;
+		if (frameTimer.up ()) {
+			cout << "This second " << frameCountThisSecond << " frames, ";
+			frameCountThisSecond = 0;
 			timeSpentCascading = 0.0;
 		}
-		timeBeforeRead = system_clock::now ();
+
 	}
 	esc_loop:
 	cout << lockFrames << " klatek, z których " << lockFrameTwoEyes <<
