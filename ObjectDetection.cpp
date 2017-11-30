@@ -29,6 +29,7 @@ enum detectMode {off, search, lock, relock, debug};
 void detectAndDisplay( Mat frame );
 void detect (Mat frame);
 int initDisplay ();
+void printRect (const Rect& r);
 
 /** Global variables */
 String faceCascadeName, eyesCascadeName;
@@ -36,16 +37,24 @@ CascadeClassifier faceCascade;
 CascadeClassifier eyesCascade;
 String windowName = "Capture - Face detection";
 const double lockInterval = 1.5;
-const double permissibleRelockError = 100.0;
+const double permissibleRelockError = 125.0;
+const unsigned framesToRelock = 5;
+const unsigned framesToSearch = 10;
 detectMode mode = detectMode::search;
 VideoCapture capture;
 double timeSpentReading = 0.,timeSpentCascading = 0.;
 bool drawCascade = true;
+bool printFrames = false;
 Timer modeTimer, frameTimer;
 
 int frameCountThisSecond= 0;
 int lockFrames = 0;
 int lockFrameTwoEyes = 0;
+unsigned framesInMode;
+
+Rect lockFace;
+Mat lockFaceROI;
+vector <Rect> lockEyes;
 
 
 /** searchMode */
@@ -113,6 +122,15 @@ int main( int argc, const char** argv )
 			case 's':
 				mode = detectMode::search;
 				break;
+			case 't':
+				printFrames = !printFrames;
+			case 'p':
+				cout << "Face:\n";
+				printRect (lockFace);
+				cout << "Eyes: " << lockEyes.size () << endl;
+				for (auto e: lockEyes)
+					printRect (e);
+				break;
 			case ' ':
 				sprintf (filename, "filename%.3d.jpg", numScreenshotsTaken++);
 				imwrite (filename, frame);
@@ -121,15 +139,20 @@ int main( int argc, const char** argv )
 		}
 
 		if (frameTimer.up ()) {
-			cout << "This second " << frameCountThisSecond << " frames, ";
+			if (printFrames)
+				cout << "This second " << frameCountThisSecond
+					 << " frames" << endl;
 			frameCountThisSecond = 0;
 			timeSpentCascading = 0.0;
+			frameTimer.reset();
 		}
-
+		frameCountThisSecond++;
 	}
 	esc_loop:
 	cout << lockFrames << " klatek, z których " << lockFrameTwoEyes <<
 		" z dwoma oczami" << endl;
+	// only for personal use
+//	system ("wmctrl -a demiurg");
 	return 0;
 }
 
@@ -162,10 +185,6 @@ void detectAndDisplay (Mat frame)
 	vector <Rect> newFaces;
 	vector <Mat> newFacesROI;
 	vector <vector <Rect>> newEyes;
-
-	static Rect lockFace;
-	Mat lockFaceROI;
-	vector <Rect> lockEyes;
 
 	// Pozyskanie obrazów i kaskadowanie
 	switch (mode) {
@@ -201,7 +220,7 @@ void detectAndDisplay (Mat frame)
 			if (lockEyes.size () == 2) lockFrameTwoEyes++;
 			if (drawCascade) {
 				rectangle (frame, lockFace, Scalar (0,255,255), 4,8,0);
-				cout << "Malowanie w lock, " <<  lockEyes.size () << " oczy\n";
+//				cout << "Malowanie w lock, " <<  lockEyes.size () << " oczy\n";
 				for (auto e : lockEyes) {
 					Point tl (lockFace.tl () + e.tl ());
 					Rect eye (tl, e.size());
@@ -213,43 +232,54 @@ void detectAndDisplay (Mat frame)
 			break;
 	}
 
+	framesInMode++;
 	// przetwarzanie specifyczne dla trybów
 	switch (mode) {
 		case detectMode::lock:
 //			cout << "Obecnie minęło " << modeTimer.current ()<< endl;
 			if (modeTimer.up ()) {
 				mode = detectMode::relock;
-				cout << "Wejście do trybu relock" << endl;
+				framesInMode = 0;
+				cout << "Wejście do trybu \t\trelock" << endl;
 			}
 			break;
 		case detectMode::search:
-			cout << "W trybie search: " << newFaces.size () << " twarzy\n";
+//			cout << "W trybie search: " << newFaces.size () << " twarzy\n";
 			if (newFaces.size () == 1) {
 				lockFace = newFaces [0];
 				mode = detectMode::lock;
 				// zainicjować odliczanie czasu w lock
 				modeTimer.start (lockInterval);
-				cout << "Wejście do trybu lock" << endl;
+				framesInMode = 0;
+				cout << "Wejście do trybu \t\tlock" << endl;
 			}
 			break;
 		case detectMode::relock: {
 			double lowestError = numeric_limits<double>::infinity();
 			Vector4d lockFaceVec (lockFace.x, lockFace.y,
 				lockFace.width, lockFace.height);
-			Rect candidateFace;
-			for (auto f : newFaces ) {
+			unsigned candidateFaceIndex;
+			for (unsigned c = 0; c != newFaces.size (); c++) {
+				auto f = newFaces [c];
 				Vector4d candidateVec  (f.x, f.y, f.width, f.height);
 				if ((lockFaceVec-candidateVec).norm () < lowestError) {
 					lowestError = (lockFaceVec-candidateVec).norm ();
-					candidateFace = f;
+					candidateFaceIndex = c;
 				}
 			}
 			cout << "Najmniesza różnica to " << lowestError << endl;
-			if (lowestError < permissibleRelockError) {
-				lockFace = candidateFace;
+			if (lowestError < permissibleRelockError &&
+					newEyes[candidateFaceIndex].size () >= 2) {
+				lockFace = newFaces[candidateFaceIndex];
 				mode = detectMode::lock;
-				cout << "Wejście do trybu lock" << endl;
+				framesInMode = 0;
 				modeTimer.start (lockInterval);
+				cout << "Wejście do trybu \t\tlock" << endl;
+			}
+			if (framesInMode >= framesToRelock) {
+				mode = detectMode::search;
+				framesInMode = 0;
+				cout << "Wejście do trybu \t\tsearch" << endl;
 			}
 			break;
 		} default:
@@ -258,6 +288,11 @@ void detectAndDisplay (Mat frame)
 
 
 	imshow( windowName, frame );
+}
+
+void printRect (const Rect& r) {
+	cout 	<< "x=" << r.x << " y=" << r.y <<
+			 " ht=" << r.height << " wd=" << r.width << endl;
 }
 
 /** @function detectAndDisplay */
