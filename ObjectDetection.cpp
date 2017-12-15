@@ -30,6 +30,7 @@ void detectAndDisplay( Mat frame );
 void detect (Mat frame);
 int initDisplay ();
 void printRect (const Rect& r);
+Point findPupil (Mat eye);
 
 /** Global variables */
 String faceCascadeName, eyesCascadeName;
@@ -44,7 +45,7 @@ detectMode mode = detectMode::search;
 VideoCapture capture;
 double timeSpentReading = 0.,timeSpentCascading = 0.;
 bool drawCascade = true;
-bool printFrames = false;
+bool printFrames = true;
 Timer modeTimer, frameTimer;
 
 int frameCountThisSecond= 0;
@@ -56,6 +57,8 @@ Rect lockFace;
 Mat lockFaceROI;
 vector <Rect> lockEyes;
 
+double blurSigmaX, blurSigmaY;
+bool blurFrame = false;
 
 /** searchMode */
 
@@ -68,7 +71,9 @@ int main( int argc, const char** argv )
 	CommandLineParser parser = CommandLineParser (argc, argv,
 		"{help h||}"
 		"{faceCascade|haarcascade_frontalface_alt.xml|}"
-		"{eyesCascade|haarcascade_eye_tree_eyeglasses.xml|}");
+		"{eyesCascade|haarcascade_eye_tree_eyeglasses.xml|}"
+		"{sigma|0.0|}"
+		"{blur|0|}");
 
 	if (argc > 1 && !strcmp (argv[1],   "help")) {
 		cout << "\nThis program demonstrates using \
@@ -79,6 +84,10 @@ int main( int argc, const char** argv )
 	}
 	faceCascadeName = parser.get<string>("faceCascade");
 	eyesCascadeName = parser.get<string>("eyesCascade");
+	if (parser.get<int> ("sigma") != 0.0) {
+		blurSigmaX = blurSigmaY =parser.get<int> ("sigma");
+		blurFrame = true;
+	}
 	cout.precision (3);
 	cout << "Face cascade from " << faceCascadeName << endl
 		 << "Eye cascade from  " << eyesCascadeName << endl;
@@ -95,8 +104,7 @@ int main( int argc, const char** argv )
 			break;
 	}
 
-	frameTimer.start (1.);
-
+	frameTimer.start (1.0);
 	Mat frame;
 
 	for (;capture.read(frame); frameCount++) {
@@ -132,9 +140,15 @@ int main( int argc, const char** argv )
 					printRect (e);
 				break;
 			case ' ':
-				sprintf (filename, "filename%.3d.jpg", numScreenshotsTaken++);
+				sprintf (filename, "filename%.3d.jpg", numScreenshotsTaken);
 				imwrite (filename, frame);
 				cout << "Saved to " << filename << endl;
+				for (unsigned i = 0; i != lockEyes.size () ; ++i) {
+					sprintf (filename, "eye%.3d-%d.jpg", numScreenshotsTaken, i);
+					imwrite (filename, frame(lockFace)(lockEyes[i]));
+				}
+				cout << "Saved eyes" << endl;
+				numScreenshotsTaken++;
 				break;
 		}
 
@@ -168,7 +182,7 @@ int initDisplay ()
 		return -1;
 	};
 	//-- 2. Read the video stream
-	capture.open( 0 );
+	capture.open( 0,cv::CAP_V4L2   );
 	if (!capture.isOpened() ) {
 		printf("--(!)Error opening video capture\n");
 		return -1;
@@ -179,7 +193,11 @@ int initDisplay ()
 void detectAndDisplay (Mat frame)
 {
 	Mat frameGrayscale;
+	Mat frameGrayBlur;
+	static Mat &frameToPrint = (blurFrame) ? frameGrayBlur : frame;
 	cvtColor( frame, frameGrayscale, COLOR_BGR2GRAY );
+	if (blurFrame)
+		GaussianBlur (frameGrayscale, frameGrayBlur, Size (0,0), blurSigmaX, blurSigmaY);
 	equalizeHist( frameGrayscale, frameGrayscale );
 
 	vector <Rect> newFaces;
@@ -222,10 +240,13 @@ void detectAndDisplay (Mat frame)
 				rectangle (frame, lockFace, Scalar (0,255,255), 4,8,0);
 //				cout << "Malowanie w lock, " <<  lockEyes.size () << " oczy\n";
 				for (auto e : lockEyes) {
+//					cout << e.width << ' ';
 					Point tl (lockFace.tl () + e.tl ());
 					Rect eye (tl, e.size());
+					findPupil (frameGrayscale (eye));
 					rectangle (frame, eye, Scalar (0, 255,0), 4, 8, 0);
 				}
+//				cout << endl;
 			}
 			break;
 		default:
@@ -286,14 +307,26 @@ void detectAndDisplay (Mat frame)
 			break;
 	}
 
+	imshow( windowName, frameToPrint);
+//	imshow( windowName, frameGrayBlur );
+}
 
-	imshow( windowName, frame );
+Point findPupil (Mat eye) {
+	Mat kernel = (Mat_<char>(3,3) << 0, 1, 0, 1, -4, 1, 0, 1, 0), grad, gradBlurred;
+	cout << kernel.rows << ' ' << kernel.cols << ' ' << kernel.channels () << endl;
+	cout << eye.rows << ' ' << eye.cols << ' ' << eye.channels () << endl;
+	cv::filter2D (eye, grad, eye.depth(), kernel);
+	GaussianBlur (grad, gradBlurred , Size (0,0), blurSigmaX, blurSigmaY);
+	cv::imshow ("blurred", gradBlurred);
+	cv::waitKey ();
+	return Point(0,0);
 }
 
 void printRect (const Rect& r) {
 	cout 	<< "x=" << r.x << " y=" << r.y <<
 			 " ht=" << r.height << " wd=" << r.width << endl;
 }
+
 
 /** @function detectAndDisplay */
 //void detectAndDisplay(Mat frame)
