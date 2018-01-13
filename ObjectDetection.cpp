@@ -45,6 +45,7 @@ detectMode mode = detectMode::search;
 VideoCapture capture;
 double timeSpentReading = 0.,timeSpentCascading = 0.;
 bool drawCascade = true;
+bool pupilFlag = false;
 bool printFrames = true;
 Timer modeTimer, frameTimer;
 
@@ -132,6 +133,8 @@ int main( int argc, const char** argv )
 				break;
 			case 't':
 				printFrames = !printFrames;
+			case 'g':
+				pupilFlag = true;
 			case 'p':
 				cout << "Face:\n";
 				printRect (lockFace);
@@ -243,7 +246,7 @@ void detectAndDisplay (Mat frame)
 //					cout << e.width << ' ';
 					Point tl (lockFace.tl () + e.tl ());
 					Rect eye (tl, e.size());
-					findPupil (frameGrayscale (eye));
+					// findPupil (frameGrayscale (eye));
 					rectangle (frame, eye, Scalar (0, 255,0), 4, 8, 0);
 				}
 //				cout << endl;
@@ -262,6 +265,12 @@ void detectAndDisplay (Mat frame)
 				mode = detectMode::relock;
 				framesInMode = 0;
 				cout << "Wejście do trybu \t\trelock" << endl;
+			}
+			if (pupilFlag) {
+//				for (auto e : lockEyes) {
+//					;
+//				}
+				pupilFlag = false;
 			}
 			break;
 		case detectMode::search:
@@ -308,14 +317,15 @@ void detectAndDisplay (Mat frame)
 	}
 
 	imshow( windowName, frameToPrint);
-//	imshow( windowName, frameGrayBlur );
 }
 
 Point findPupil (Mat eye) {
-	Mat kernel = (Mat_<char>(3,3) << 0, 1, 0, 1, -4, 1, 0, 1, 0), grad, gradBlurred;
-	cout << kernel.rows << ' ' << kernel.cols << ' ' << kernel.channels () << endl;
-	cout << eye.rows << ' ' << eye.cols << ' ' << eye.channels () << endl;
-	cv::filter2D (eye, grad, eye.depth(), kernel);
+	Mat kernelGradX = (Mat_<int>(3,1) << -1,0,1),
+		kernelGradY = (Mat_<int>(1,3) << -1,0,1), grad, gradBlurred;
+	cout << kernelGradX.rows << ' ' << kernelGradX.cols << ' ' <<
+		kernelGradX.channels () << endl;
+	cout <<eye.rows << ' ' << eye.cols << ' ' << eye.channels () << endl;
+	cv::filter2D (eye, grad, eye.depth(), kernelGradX);
 	GaussianBlur (grad, gradBlurred , Size (0,0), blurSigmaX, blurSigmaY);
 	cv::imshow ("blurred", gradBlurred);
 	cv::waitKey ();
