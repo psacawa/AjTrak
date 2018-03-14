@@ -2,7 +2,7 @@
 #include "opencv2/videoio.hpp"
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc.hpp"
-#include <Eigen/Dense>
+#include <eigen3/Eigen/Dense>
 #include "Timer.h"
 
 #include <iostream>
