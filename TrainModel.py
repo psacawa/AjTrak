@@ -1,63 +1,83 @@
 import pandas as pd
 import keras
-from keras import layers, optimizers, losses, models
+from keras import layers, optimizers, losses, models, Model
+from keras.layers import Input, Conv2D, MaxPooling2D, Flatten, Dense, concatenate
 from keras.models import Sequential 
 import numpy as np
 from skimage import io,transform
-from Common import *
+from Common import getModelFilename
 #  import tensorflow as tf
 
 
 def train (datasetId,modelId=0,numEpoch=100):
-    model = getModel (modelId)
+    # władować model
+    model = retrieveModel (modelId)
     print (model.input_shape)
     model.summary()
 
-    data, labels = loadData(datasetId,model.input_shape)
-    print ("Data  : ", data.shape)
-    print ("Labels: ", labels.shape)
+    # władować dane
+    faceData, eyeData, mouseData = loadData(datasetId,model.input_shape[-1])
+    print ("Face Data  : ", faceData.shape)
+    print ("Eye Data  : ",  eyeData.shape)
+    print ("Labels: ",      mouseData.shape)
 
+    # ustawienia optymalizacji
     optimizer = optimizers.Adam(lr=1e-3)
     loss = losses.mean_squared_error
+
+    # trenować model
     model.compile(optimizer=optimizer, loss=loss)
-    model.fit (data, labels, epochs=numEpoch, batch_size=8)
+    model.fit (x=[faceData,eyeData], y=mouseData, epochs=numEpoch, batch_size=8)
+
+    # zapisać model
     modelFolder = "./models/" 
     models.save_model (model,  getModelFilename (datasetId))
     return model
 
-def getModel (i= 0):
-    return {
+def retrieveModel (i= 1):
+    if i == 0:
         # wyłącznie korzystając z eye0, czyli z prawego oka
-        0: Sequential([
-            layers.Conv2D (96, 3, activation='relu', data_format="channels_last", input_shape=(32,48,3)),
-            layers.MaxPool2D(),
-            layers.Conv2D (256, 3, activation='relu', data_format="channels_last"),
-            layers.MaxPool2D(),
-            layers.Conv2D (512, 3, activation='relu', data_format="channels_last"),
-            #  layers.Conv2D (512, 3, activation='relu', data_format="channels_last"),
-            layers.Flatten(),
-            layers.Dense (16, activation='relu'),
-            layers.Dense(2)
-        ]), 
-        # to samo co getModel (0), tylko, zo użyciem obu oczy
-        1: Sequential([
-            layers.Conv2D (96, 6, activation='relu', data_format="channels_last", input_shape=(32,48,6)),
-            layers.MaxPool2D(),
-            layers.Conv2D (256, 3, activation='relu', data_format="channels_last"),
-            layers.MaxPool2D(),
-            layers.Conv2D (512, 3, activation='relu', data_format="channels_last"),
-            #  layers.Conv2D (512, 3, activation='relu', data_format="channels_last"),
-            layers.Flatten(),
-            layers.Dense (16, activation='relu'),
-            layers.Dense(2)
-        ]), 
-        2: Sequential([
-            layers.Conv2D (96, 3, activation='relu', data_format="channels_last", input_shape=(32,96,3)),
-            layers.MaxPool2D()
+        return Sequential([
+            Conv2D (96, 3, activation='relu', data_format="channels_last", input_shape=(32,48,3)),
+            MaxPooling2D(),
+            Conv2D (256, 3, activation='relu', data_format="channels_last"),
+            MaxPooling2D(),
+            Conv2D (512, 3, activation='relu', data_format="channels_last"),
+            #  Conv2D (512, 3, activation='relu', data_format="channels_last"),
+            Flatten(),
+            Dense (16, activation='relu'),
+            Dense(2)
+        ]) 
+    elif i == 1:
+        # bez współrzędne odpowiadające twarzy
+        return  Sequential([
+            Conv2D (96, 6, activation='relu', data_format="channels_last", input_shape=(32,48,6)),
+            MaxPooling2D(),
+            Conv2D (256, 3, activation='relu', data_format="channels_last"),
+            MaxPooling2D(),
+            Conv2D (512, 3, activation='relu', data_format="channels_last"),
+            #  Conv2D (512, 3, activation='relu', data_format="channels_last"),
+            Flatten(),
+            Dense (16, activation='relu'),
+            Dense(2)
         ])
-    }.get(i, 0)
+    elif i == 2:
+        eye  = Input (shape=(32,48,6,))
+        face = Input (shape = (4,))
+        conv = eye
+        conv = Conv2D (96, 6, activation='relu', data_format="channels_last") (conv)
+        conv = MaxPooling2D () (conv)
+        conv = Conv2D (256, 3, activation='relu', data_format="channels_last") (conv)
+        conv = MaxPooling2D () (conv)
+        conv = Conv2D (512, 3, activation='relu', data_format="channels_last") (conv)
+        # ...
+        conv = Flatten ()(conv)
+        merged = concatenate (inputs=[face,conv], axis=1)
+        merged = Dense (16) (merged)
+        merged = Dense (2) (merged)
+        return Model (inputs=[face,eye] , outputs= merged)
 
-def loadDataSet (i,shape=(1,32,48,3)):
+def loadDataSet (i,shape=(1,32,48,6)):
     folder = "data/" + "training_data" + str(i).zfill (3) + "/"
     frame = pd.read_csv(folder + "data.csv")
     mouse_x = frame.mouse_x.as_matrix()
@@ -67,26 +87,29 @@ def loadDataSet (i,shape=(1,32,48,3)):
     #  eye1 = np.array ([io.imread (folder + string).transpose() for string in frame.file_eye1])
     eye0 = np.array ([io.imread (folder + string) for string in frame.file_eye0])
     eye1 = np.array ([io.imread (folder + string) for string in frame.file_eye1])
+    face = np.array (frame.loc[:,['face_x', 'face_y', 'face_width','face_height']])
 
     # jeśli model używa oboje oczy, to zwróć skonkatenowane oczy wzdłuż wymiaru kanałów ( [-1] )
     if shape[-1] == 6:
         eye = np.concatenate ((eye0, eye1), axis=3)
-        return eye, mouse
+        return face,eye, mouse
     else:
-        return eye0, mouse
+        return face,eye0, mouse
 
-def loadData (l, shape=(1,32,48,3)):
-    shape = list (shape)
+def loadData (l, shape=(1,32,48,6)):
+    shape = list(shape)
     shape[0] = 0
     if type (l) == list or type (l) == range:
-        data = np.empty (shape)
-        labels= np.empty (shape=(0,2))
+        faceData = np.empty (shape=(0,4))
+        eyeData = np.empty (shape)
+        mouseData = np.empty (shape=(0,2))
         for i in l:
             print ("Loading dataset " + str (i).zfill (3))
-            newData, newLabels = loadDataSet (i,shape)
-            data = np.concatenate ((data, newData),axis=0)
-            labels = np.concatenate ((labels, newLabels),axis= 0)
-        return data, labels
+            newFace, newEye, newLabels = loadDataSet (i,shape)
+            faceData =   np.concatenate ([faceData, newFace],axis=0)
+            eyeData =    np.concatenate ([eyeData, newEye],axis=0) 
+            mouseData =    np.concatenate ((mouseData, newLabels),axis= 0)
+        return faceData, eyeData, mouseData
     elif type (l) == int:
         return loadDataSet (l, shape)
 
