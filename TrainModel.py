@@ -4,9 +4,10 @@ from keras import layers, optimizers, losses, models, regularizers, Model
 from keras.layers import Input, Conv2D, MaxPooling2D, Flatten, Dense, concatenate, Dropout
 from keras.models import Sequential 
 from keras.utils import plot_model
-import numpy as np
 from skimage import io,transform
 from Common import getModelFilename
+import numpy as np
+from time import time
 #  import tensorflow as tf
 
 
@@ -29,7 +30,9 @@ def train (datasetId,modelId=2,numEpoch=100):
 
     # trenować model
     model.compile(optimizer=optimizer, loss=loss)
+    startTime = time()
     model.fit (x=[faceData,eyeData], y=mouseData, epochs=numEpoch, batch_size=8, shuffle=True)
+    print ("Training took {} seconds".format (time() - startTime))
 
     # zapisać model
     modelFolder = "./models/" 
