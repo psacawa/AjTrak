@@ -1,22 +1,24 @@
 import pandas as pd
 import keras
-from keras import layers, optimizers, losses, models, Model
-from keras.layers import Input, Conv2D, MaxPooling2D, Flatten, Dense, concatenate
+from keras import layers, optimizers, losses, models, regularizers, Model
+from keras.layers import Input, Conv2D, MaxPooling2D, Flatten, Dense, concatenate, Dropout
 from keras.models import Sequential 
+from keras.utils import plot_model
 import numpy as np
 from skimage import io,transform
 from Common import getModelFilename
 #  import tensorflow as tf
 
 
-def train (datasetId,modelId=0,numEpoch=100):
+def train (datasetId,modelId=2,numEpoch=100):
     # władować model
     model = retrieveModel (modelId)
     print (model.input_shape)
     model.summary()
+    plot_model (model,  "./images/model.png")
 
     # władować dane
-    faceData, eyeData, mouseData = loadData(datasetId,model.input_shape[-1])
+    faceData, eyeData, mouseData = loadData(datasetId, model.input_shape[-1])
     print ("Face Data  : ", faceData.shape)
     print ("Eye Data  : ",  eyeData.shape)
     print ("Labels: ",      mouseData.shape)
@@ -27,7 +29,7 @@ def train (datasetId,modelId=0,numEpoch=100):
 
     # trenować model
     model.compile(optimizer=optimizer, loss=loss)
-    model.fit (x=[faceData,eyeData], y=mouseData, epochs=numEpoch, batch_size=8)
+    model.fit (x=[faceData,eyeData], y=mouseData, epochs=numEpoch, batch_size=8, shuffle=True)
 
     # zapisać model
     modelFolder = "./models/" 
@@ -43,20 +45,18 @@ def retrieveModel (i= 1):
             Conv2D (256, 3, activation='relu', data_format="channels_last"),
             MaxPooling2D(),
             Conv2D (512, 3, activation='relu', data_format="channels_last"),
-            #  Conv2D (512, 3, activation='relu', data_format="channels_last"),
             Flatten(),
             Dense (16, activation='relu'),
             Dense(2)
         ]) 
     elif i == 1:
-        # bez współrzędne odpowiadające twarzy
+        # bez współrzędnych odpowiadające twarzy
         return  Sequential([
             Conv2D (96, 6, activation='relu', data_format="channels_last", input_shape=(32,48,6)),
             MaxPooling2D(),
             Conv2D (256, 3, activation='relu', data_format="channels_last"),
             MaxPooling2D(),
             Conv2D (512, 3, activation='relu', data_format="channels_last"),
-            #  Conv2D (512, 3, activation='relu', data_format="channels_last"),
             Flatten(),
             Dense (16, activation='relu'),
             Dense(2)
@@ -64,16 +64,21 @@ def retrieveModel (i= 1):
     elif i == 2:
         eye  = Input (shape=(32,48,6,))
         face = Input (shape = (4,))
+
         conv = eye
         conv = Conv2D (96, 6, activation='relu', data_format="channels_last") (conv)
         conv = MaxPooling2D () (conv)
         conv = Conv2D (256, 3, activation='relu', data_format="channels_last") (conv)
+        conv = Dropout (rate=9.3) (conv)
         conv = MaxPooling2D () (conv)
         conv = Conv2D (512, 3, activation='relu', data_format="channels_last") (conv)
-        # ...
         conv = Flatten ()(conv)
+
         merged = concatenate (inputs=[face,conv], axis=1)
-        merged = Dense (16) (merged)
+        #  merged = Dense (16, activation='relu') (merged)
+        # błąd w tym poleeceniu????
+        merged = Dense (16, activation='relu') (merged)
+        #  merged = Dense (16) (merged)
         merged = Dense (2) (merged)
         return Model (inputs=[face,eye] , outputs= merged)
 
