@@ -1,4 +1,5 @@
 import os
+import json
 
 def getModelFilename (modelId='last'):
     folder = "./models/"
@@ -22,3 +23,6 @@ def getTrainedModel (modelId='last'):
     except:
         print ("Model file " + modelFile + " not found")
         return
+
+def printLayer (layer):
+    print (json.dumps (layer['config'],sort_keys= True, indent=4))

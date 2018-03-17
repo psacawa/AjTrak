@@ -16,6 +16,10 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import keras
 from keras import models
 
+# trzeba będzie chyba zaimplementować przednie przejście w tensorflow
+# nie wygląda na to, że keras ma takie możliwości
+import tensorflow as tf
+
 # run the specified model online
 def main (modelId='last',moveMouse=False):
     targetEye = (48,32)
@@ -96,8 +100,19 @@ def main (modelId='last',moveMouse=False):
     capture.release()
     cv2.destroyAllWindows()
 
-# scale a rectangle so that (w,h) = target
+def configForwardPass (config):
+    for i, layer in enumerate (config['layers']):
+        if layer['class_name'] == 'InputLayer':
+            input_shape = layer['config']['batch_input_shape']
+            #  print (input_shape)
+            layer['batch_input_shape'] = tuple ([1]+list(input_shape))
+            #  print (layer['batch_input_shape'] )
+        if 'stateful' in  layer['config']:
+            layer['config']['stateful'] = True
+    return config
+
 def scale (r, target):
+    # scale a rectangle so that (w,h) = target
     tx,ty = target
     assert ( tx % 2 == 0 and ty % 2 == 0), "Target rectangle must have even dimensions"
     centre = (r[0]+ r[2]//2, r[1] + r[3]//2)
@@ -108,9 +123,9 @@ def getMousePos():
     data = display.Display().screen().root.query_pointer()._data
     return np.array((data["root_x"], data["root_y"]))
 
-# class for recalling the last N values of an arithmetic type
-# and returning the average of them in O(1) time
 class LastAverage ():
+    # class for recalling the last N values of an arithmetic type
+    # and returning the average of them in O(1) time
 
     def __init__ (self, N):
         self.length = N

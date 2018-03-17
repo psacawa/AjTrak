@@ -84,6 +84,8 @@ def retrieveModel (i= 1):
         #  merged = Dense (16) (merged)
         merged = Dense (2) (merged)
         return Model (inputs=[face,eye] , outputs= merged)
+    elif i == 3:
+        return Sequential ()
 
 def loadDataSet (i,shape=(1,32,48,6)):
     folder = "data/" + "training_data" + str(i).zfill (3) + "/"
