@@ -6,7 +6,6 @@ import numpy as np
 import cv2
 from Xlib import display
 import matplotlib.pyplot as plt
-from Common import *
 # forces the code to run on CPU
 # must be executed before tf/keras imported
 import os
@@ -15,6 +14,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 import keras
 from keras import models
+from Common import *
 
 # trzeba będzie chyba zaimplementować przednie przejście w tensorflow
 # nie wygląda na to, że keras ma takie możliwości
@@ -24,9 +24,17 @@ import tensorflow as tf
 def main (modelId='last',moveMouse=False):
     targetEye = (48,32)
     dimVector = (1,)+targetEye+(3,)
+    recurrent = True
 
     model = getTrainedModel (modelId)
     model.summary()
+
+    if recurrent:
+        config = model.get_config()
+        config = configForwardPass (config)
+        model.from_config (config)
+        model.summary()
+
 
     xContext = xdo.Xdo()
     capture = cv2.VideoCapture (0)
@@ -75,6 +83,8 @@ def main (modelId='last',moveMouse=False):
                        imageEye1.reshape (dimVector).transpose(0, 2,1,3)),
                        axis=3
                     )
+
+                    # forward pass
                     modelPrediction = model.predict (x=[faceInput,eyeInput])
                     modelPrediction = modelPrediction.flatten()
                     mouseLoc = getMousePos ()

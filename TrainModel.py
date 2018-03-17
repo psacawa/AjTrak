@@ -85,7 +85,11 @@ def retrieveModel (i= 1):
         merged = Dense (2) (merged)
         return Model (inputs=[face,eye] , outputs= merged)
     elif i == 3:
-        return Sequential ()
+        eyeInp  = Input (shape=(32,48,6,))
+        faceInp = Input (shape = (4,))
+
+
+        
 
 def loadDataSet (i,shape=(1,32,48,6)):
     folder = "data/" + "training_data" + str(i).zfill (3) + "/"
@@ -132,3 +136,6 @@ def main (modelFile=""):
     print ("Enter number of epochs")
     input (epochs)
     model = train (n, numEpoch=epochs)
+
+if __name__ == "__main__":
+    main()
