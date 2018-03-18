@@ -1,7 +1,7 @@
 import pandas as pd
 import keras
 from keras import layers, optimizers, losses, models, regularizers, Model
-from keras.layers import Input, Conv2D, MaxPooling2D, Flatten, Dense, concatenate, Dropout
+from keras.layers import Input, Conv2D, MaxPooling2D, Flatten, Dense, concatenate, Dropout, LSTM
 from keras.models import Sequential 
 from keras.utils import plot_model
 from skimage import io,transform
@@ -38,6 +38,11 @@ def train (datasetId,modelId=2,numEpoch=100):
     modelFolder = "./models/" 
     models.save_model (model,  getModelFilename (datasetId))
     return model
+
+def trainRecurrent ():
+    model = retrieveModel (modelId)
+    model.summary()
+    plot_model (model,  "./images/model.png")
 
 def retrieveModel (i= 1):
     if i == 0:
@@ -79,19 +84,33 @@ def retrieveModel (i= 1):
 
         merged = concatenate (inputs=[face,conv], axis=1)
         #  merged = Dense (16, activation='relu') (merged)
-        # błąd w tym poleeceniu????
         merged = Dense (16, activation='relu') (merged)
         #  merged = Dense (16) (merged)
         merged = Dense (2) (merged)
         return Model (inputs=[face,eye] , outputs= merged)
     elif i == 3:
-        eyeInp  = Input (shape=(32,48,6,))
+        eyeInp  = Input (shape=(None,32,48,6,))
         faceInp = Input (shape = (4,))
 
+        eye = eyeInp
+        eye = Conv2D (96, 6, activation='relu', data_format="channels_last") (eye)
+        eye = MaxPooling2D () (eye)
+        eye = Conv2D (256, 3, activation='relu', data_format="channels_last") (eye)
+        eye = Dropout (rate=9.3) (eye)
+        eye = MaxPooling2D () (eye)
+        eye = Conv2D (512, 3, activation='relu', data_format="channels_last") (eye)
+        eye = Flatten ()(eye)
+        eye = LSTM (128)(eye)
+        face = faceInp
 
-        
+        merged = concatenate (inputs=[face,eye], axis=1)
+        merged = Dense (128, activation='relu')
+        merged = LSTM (32) (merged)
+        merged = Dense (2)
+        return Model (inputs=[faceInp, eyeInp], outputs =merged)
 
 def loadDataSet (i,shape=(1,32,48,6)):
+# ładować pojedynczy zbiór danych
     folder = "data/" + "training_data" + str(i).zfill (3) + "/"
     frame = pd.read_csv(folder + "data.csv")
     mouse_x = frame.mouse_x.as_matrix()
@@ -110,7 +129,9 @@ def loadDataSet (i,shape=(1,32,48,6)):
     else:
         return face,eye0, mouse
 
-def loadData (l, shape=(1,32,48,6)):
+def loadData (l, shape=(1,32,48,6), batchSize=None):
+# ladować albo pojedynczy zbiór danych, reprezentowane przez int, albo i lista
+# możliwe użycie opcji batchSize, które rozdziela kazde ze zbiorów w rozdzielone batche o tej długości
     shape = list(shape)
     shape[0] = 0
     if type (l) == list or type (l) == range:
@@ -126,6 +147,13 @@ def loadData (l, shape=(1,32,48,6)):
         return faceData, eyeData, mouseData
     elif type (l) == int:
         return loadDataSet (l, shape)
+
+# funkcja odzielającą dane w batchy o określonej długości, 
+# która to będzie długością trenowanych batchów
+def batchSplit (data, batchSize=100):
+    ret = np.split (data, np.arange(data.shape[0],step=batchSize)[1:])[:-1]
+    #  print ([x.shape for x in ret])
+    return np.array (ret)
 
 def main (modelFile=""):
     if modelFile == "":
