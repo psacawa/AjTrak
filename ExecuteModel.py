@@ -4,7 +4,6 @@
 import xdo
 import numpy as np
 import cv2
-from Xlib import display
 import matplotlib.pyplot as plt
 # forces the code to run on CPU
 # must be executed before tf/keras imported
@@ -127,11 +126,6 @@ def scale (r, target):
     assert ( tx % 2 == 0 and ty % 2 == 0), "Target rectangle must have even dimensions"
     centre = (r[0]+ r[2]//2, r[1] + r[3]//2)
     return np.array ((centre[0]-tx//2, centre[1]-ty//2,tx,ty))
-
-def getMousePos():
-    # mousepos() --> (x, y) get the mouse coordinates on the screen (linux, Xlib)
-    data = display.Display().screen().root.query_pointer()._data
-    return np.array((data["root_x"], data["root_y"]))
 
 class LastAverage ():
     # class for recalling the last N values of an arithmetic type

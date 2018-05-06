@@ -39,11 +39,21 @@ def train (datasetId,modelId=2,numEpoch=100):
     models.save_model (model,  getModelFilename (datasetId))
     return model
 
-def trainRecurrent ():
+def trainRecurrent (datasetId,modelId=3,numEpoch=100):
+    # trenowąć modele rekurencyjne z oddzielaniem danych w batche
     model = retrieveModel (modelId)
     model.summary()
     plot_model (model,  "./images/model.png")
 
+    faceData, eyeData, mouseData = loadData(datasetId, model.input_shape[-1])
+    faceData  = batchSplit (faceData,step    = batchSize)
+    eyeData   = batchSplit ( eyeData, step   = batchSize)
+    mouseData = batchSplit ( mouseData, step = batchSize)
+    print ("Face Data  : ", faceData.shape)
+    print ("Eye Data  : ",  eyeData.shape)
+    print ("Labels: ",      mouseData.shape)
+
+# obtain models
 def retrieveModel (i= 1):
     if i == 0:
         # wyłącznie korzystając z eye0, czyli z prawego oka
@@ -90,17 +100,24 @@ def retrieveModel (i= 1):
         return Model (inputs=[face,eye] , outputs= merged)
     elif i == 3:
         eyeInp  = Input (shape=(None,32,48,6,))
+        faceInp = Input (shape = (None,4))
+        eye = Flatten () (eyeInp)
+       
+        #  merged = concatenate ([eyeInp
+    elif i == 4:
+        # recurrent
+        eyeInp  = Input (shape=(None,32,48,6,))
         faceInp = Input (shape = (4,))
 
-        eye = eyeInp
-        eye = Conv2D (96, 6, activation='relu', data_format="channels_last") (eye)
-        eye = MaxPooling2D () (eye)
-        eye = Conv2D (256, 3, activation='relu', data_format="channels_last") (eye)
-        eye = Dropout (rate=9.3) (eye)
-        eye = MaxPooling2D () (eye)
-        eye = Conv2D (512, 3, activation='relu', data_format="channels_last") (eye)
-        eye = Flatten ()(eye)
-        eye = LSTM (128)(eye)
+        eye  = eyeInp
+        eye  = Conv2D (96, 6, activation  = 'relu', data_format = "channels_last") (eye)
+        eye  = MaxPooling2D () (eye)
+        eye  = Conv2D (256, 3, activation = 'relu', data_format = "channels_last") (eye)
+        eye  = Dropout (rate              = 9.3) (eye)
+        eye  = MaxPooling2D () (eye)
+        eye  = Conv2D (512, 3, activation = 'relu', data_format = "channels_last") (eye)
+        eye  = Flatten ()(eye)
+        eye  = LSTM (128)(eye)
         face = faceInp
 
         merged = concatenate (inputs=[face,eye], axis=1)
@@ -108,6 +125,8 @@ def retrieveModel (i= 1):
         merged = LSTM (32) (merged)
         merged = Dense (2)
         return Model (inputs=[faceInp, eyeInp], outputs =merged)
+
+
 
 def loadDataSet (i,shape=(1,32,48,6)):
 # ładować pojedynczy zbiór danych
