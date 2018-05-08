@@ -62,7 +62,7 @@ def main (modelId='last',moveMouse=False):
                 cv2.rectangle (image,(x,y), (x+w, y+h), (255,0,0), 2)
                 eyesFound = eyeCascade.detectMultiScale (faceGrayscale, 1.3, 5)
                 if len (eyesFound) == 2:
-                    #  print ("Possible face detected", facesFound)            
+                    print ("Possible face detected\t", facesFound)            
                     e0, e1 = eyesFound[0], eyesFound[1]
                     if e0[0] > e1[0]:
                         e0, e1 = e1, e0

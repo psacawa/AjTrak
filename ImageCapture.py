@@ -120,19 +120,21 @@ class CameraThread (QThread):
         try:
             faceCascade= cv2.CascadeClassifier ("./data/haarcascade_frontalface_alt.xml")
             eyeCascade = cv2.CascadeClassifier ("./data/haarcascade_eye_tree_eyeglasses.xml")
-            #  cv2.namedWindow ("test")
         except Exception as e:
             print (e)
+            #  self.wait() # ??
+            return 
 
         dataFile = self.initTraining ()
 
+        # self.terminate is set via the controlling scene's timer
         while not self.terminate:
+
             image = capture.read ()[1]
             imageGrayscale = cv2.cvtColor (image, cv2.COLOR_BGR2GRAY)
             facesFound = faceCascade.detectMultiScale (imageGrayscale, 1.3, 5) # współczynniki ?
 
             if len(facesFound) == 1:
-                #  print (facesFound)
                 x,y,w,h = facesFound[0]
                 faceInput = np.array(facesFound[0]).reshape((1,4))
                 imageFace = image[y:y+h, x:x+w]
@@ -140,7 +142,11 @@ class CameraThread (QThread):
                 cv2.rectangle (image,(x,y), (x+w, y+h), (255,0,0), 2)
                 eyesFound = eyeCascade.detectMultiScale (faceGrayscale, 1.3, 5)
                 if len (eyesFound) == 2:
-                    print ("Possible face detected", facesFound)            
+
+                    # we're in business
+                    print ("Possible face detected\t", facesFound)            
+
+                    # make sure e0 is the right eye (appears on left in the image)
                     e0, e1 = eyesFound[0], eyesFound[1]
                     if e0[0] > e1[0]:
                         e0, e1 = e1, e0
@@ -149,24 +155,25 @@ class CameraThread (QThread):
                     # experiment with local averaging
                     #  eye0Recent.push (e0)
                     #  e0 = eye0Recent.average ()
+                    #  print (e0, e1)
 
+                    # convenience rename
                     (x0,y0,w0,h0,x1,y1,w1,h1) = np.concatenate([e0,e1])
-                    print (e0, e1)
-                    #  cv2.rectangle (imageFace,(x0,y0), (x0+w0, y0+h0), (0,0,255), 2)
-                    #  cv2.rectangle (imageFace,(x1,y1), (x1+w1, y1+h1), (0,255,0), 2)
                     imageEye0 = imageFace[y0:y0+h0, x0:x0+w0]
                     imageEye1 = imageFace[y1:y1+h1, x1:x1+w1]
 
+                    #  cv2.rectangle (imageFace,(x0,y0), (x0+w0, y0+h0), (0,0,255), 2)
+                    #  cv2.rectangle (imageFace,(x1,y1), (x1+w1, y1+h1), (0,255,0), 2)
+
                     # write image
                     imageFilename = self.writeFolder + "/image" + str (dataCollected).zfill (4)
-                    print (imageFilename)
                     cv2.imwrite (imageFilename + ".jpg", image)
                     cv2.imwrite (imageFilename + "_eye0.jpg", imageEye0)
                     cv2.imwrite (imageFilename + "_eye1.jpg", imageEye1)
 
-                    pos = self.node.scenePos()
-                    print (pos)
                     # write data
+                    pos = self.node.scenePos()
+                    dataFile.write (str (dataCollected) + ",")
                     dataFile.write (str (pos.x()) + ",")
                     dataFile.write (str (pos.y()) + ",")
                     dataFile.write (str (imageFilename) + ".jpg,")
@@ -180,7 +187,6 @@ class CameraThread (QThread):
                     dataFile.write (str (x1) + "," + str (y1) + "")
                     dataFile.write ("\n")
                     
-                    #  dataFile.write (str (self.n
 
                     dataCollected += 1
                 else:
@@ -190,11 +196,11 @@ class CameraThread (QThread):
                 print ("{} faces found".format (len(facesFound)))
                 pass
 
-            #  cv2.imshow ("test", image )
-
         pass
 
     def initTraining (self):
+
+        # find less folder ./data/training_dataXXX which doesn't exist
         while True:
             filename = "./data/training_data{0}/data.csv".format (str(self.numTrainingSet).zfill(3))
             if os.path.isfile (filename):
@@ -203,12 +209,12 @@ class CameraThread (QThread):
             else:
                 break
 
-        print (filename)
         self.writeFolder = os.path.dirname (filename)
+        print ("Saving data in ", self.writeFolder)
         os.mkdir (self.writeFolder)
-        print (self.writeFolder)
         dataFile = open (filename, "w")
-        print (dataFile)
+
+        # write header
         variableList  = [ "data_id",
             "mouse_x" ,
             "mouse_y" ,
@@ -229,7 +235,6 @@ class CameraThread (QThread):
             "eye1_y",
         ]
         dataFile.write (",".join (variableList) + "\n")
-        print (",".join (variableList))
         return dataFile
 
     def scale (self, r, target):
