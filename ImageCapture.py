@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import sys, cv2, numpy as np
+import sys, os, cv2, numpy as np
 from PyQt5.QtWidgets import (QApplication, QGraphicsView, QGraphicsScene, QGraphicsItem, 
         QDesktopWidget, QGraphicsEllipseItem, QGraphicsTextItem)
 from PyQt5.QtCore import Qt , QPointF, QRectF, QRect, QThread
@@ -8,7 +8,8 @@ from PyQt5.QtGui import QPainter, QColor, QBrush, QFont
 
 class CollectDataWidget (QGraphicsView):
 
-    speed = 4
+    yIncr = 10
+    xIncr = 20
     frameTime = 20
     outOfBounds = False
     margin = 25
@@ -19,17 +20,18 @@ class CollectDataWidget (QGraphicsView):
         screen = QDesktopWidget().screenGeometry ()
         self.setGeometry (screen)
         self.setWindowTitle("Data Collection")
-        self.thread = CameraThread ()
 
         self.scene = QGraphicsScene(self)
         self.scene.setSceneRect (0,0, screen.right()-self.margin, screen.bottom()-self.margin)
         self.node = Node (self)
         self.scene.addItem (self.node)
+        # aktualnie 3:24 z (dx,dy, lambda) = (10, 20, 20)
         text =  "Keep your eyes on the blue circle - testing once begun takes ~2 min. - press <Space> to begin"
         self.text = QGraphicsTextItem  (text)
         self.text.setPos (100, 0)
         self.scene.addItem (self.text)
         
+        self.thread = CameraThread (self.node)
         self.setScene(self.scene)
         self.showFullScreen ()
 
@@ -40,12 +42,12 @@ class CollectDataWidget (QGraphicsView):
         if pos.x() > dim.x():
             self.close()
         elif (pos.y() > dim.y() or pos.y () <= 0) and not self.outOfBounds:
-            node.moveBy (abs(self.speed), 0)
-            self.speed *= -1  
+            node.moveBy (abs(self.xIncr), 0)
+            self.yIncr *= -1  
+        
             self.outOfBounds = True
-            pass
         else:
-            node.moveBy (0, self.speed)
+            node.moveBy (0, self.yIncr)
             if self.outOfBounds:
                 self.outOfBounds = False
         
@@ -100,9 +102,11 @@ class Node(QGraphicsItem):
 class CameraThread (QThread):
 
     terminate = False
+    numTrainingSet = 0
     
-    def __init__  (self):
+    def __init__  (self, node):
         QThread.__init__ (self)
+        self.node = node
         
     def __del__ (self):
         self.wait ()
@@ -111,11 +115,16 @@ class CameraThread (QThread):
         targetEye = (48,32)
         dimVector = (1,)+targetEye+(3,)
         capture = cv2.VideoCapture (0)
+        dataCollected = 0
+
         try:
             faceCascade= cv2.CascadeClassifier ("./data/haarcascade_frontalface_alt.xml")
             eyeCascade = cv2.CascadeClassifier ("./data/haarcascade_eye_tree_eyeglasses.xml")
+            #  cv2.namedWindow ("test")
         except Exception as e:
             print (e)
+
+        dataFile = self.initTraining ()
 
         while not self.terminate:
             image = capture.read ()[1]
@@ -147,13 +156,33 @@ class CameraThread (QThread):
                     #  cv2.rectangle (imageFace,(x1,y1), (x1+w1, y1+h1), (0,255,0), 2)
                     imageEye0 = imageFace[y0:y0+h0, x0:x0+w0]
                     imageEye1 = imageFace[y1:y1+h1, x1:x1+w1]
-                    eyeInput = np.concatenate (
-                       (imageEye0.reshape (dimVector).transpose(0, 2,1,3),
-                       imageEye1.reshape (dimVector).transpose(0, 2,1,3)),
-                       axis=3
-                    )
-                    print ("hello")
 
+                    # write image
+                    imageFilename = self.writeFolder + "/image" + str (dataCollected).zfill (4)
+                    print (imageFilename)
+                    cv2.imwrite (imageFilename + ".jpg", image)
+                    cv2.imwrite (imageFilename + "_eye0.jpg", imageEye0)
+                    cv2.imwrite (imageFilename + "_eye1.jpg", imageEye1)
+
+                    pos = self.node.scenePos()
+                    print (pos)
+                    # write data
+                    dataFile.write (str (pos.x()) + ",")
+                    dataFile.write (str (pos.y()) + ",")
+                    dataFile.write (str (imageFilename) + ".jpg,")
+                    dataFile.write (str (w) + "," + str (h) + ",")
+                    dataFile.write (str (x) + "," + str (y) + ",")
+                    dataFile.write (imageFilename + "_eye0.jpg,")
+                    dataFile.write (str (w0) + "," + str (h0) + ",")
+                    dataFile.write (str (x0) + "," + str (y0) + ",")
+                    dataFile.write (imageFilename + "_eye1.jpg,")
+                    dataFile.write (str (w1) + "," + str (h1) + ",")
+                    dataFile.write (str (x1) + "," + str (y1) + "")
+                    dataFile.write ("\n")
+                    
+                    #  dataFile.write (str (self.n
+
+                    dataCollected += 1
                 else:
                     print ("{} eyes found".format (len(eyesFound)))
                     pass
@@ -164,6 +193,44 @@ class CameraThread (QThread):
             #  cv2.imshow ("test", image )
 
         pass
+
+    def initTraining (self):
+        while True:
+            filename = "./data/training_data{0}/data.csv".format (str(self.numTrainingSet).zfill(3))
+            if os.path.isfile (filename):
+                self.numTrainingSet += 1
+                continue
+            else:
+                break
+
+        print (filename)
+        self.writeFolder = os.path.dirname (filename)
+        os.mkdir (self.writeFolder)
+        print (self.writeFolder)
+        dataFile = open (filename, "w")
+        print (dataFile)
+        variableList  = [ "data_id",
+            "mouse_x" ,
+            "mouse_y" ,
+            "file_face" ,
+            "face_height" ,
+            "face_width" ,
+            "face_x" ,
+            "face_y" ,
+            "file_eye0" ,
+            "eye0_height" ,
+            "eye0_width" ,
+            "eye0_x" ,
+            "eye0_y" ,
+            "file_eye1" ,
+            "eye1_height" ,
+            "eye1_width" ,
+            "eye1_x" ,
+            "eye1_y",
+        ]
+        dataFile.write (",".join (variableList) + "\n")
+        print (",".join (variableList))
+        return dataFile
 
     def scale (self, r, target):
         # scale a rectangle so that (w,h) = target
