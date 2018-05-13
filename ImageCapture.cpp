@@ -217,11 +217,11 @@ void detectAndDisplay ()
 int initDisplay ()
 {
 	//-- 1. Load the cascades
-	if (!faceCascade.load( faceCascadeName ) ){
+	if (!faceCascade.load( "data/" + faceCascadeName ) ){
 		printf("--(!)Error loading face cascade\n");
 		return -1;
 	};
-	if (!eyesCascade.load( eyesCascadeName ) ){
+	if (!eyesCascade.load( "data/" +  eyesCascadeName ) ){
 		printf("--(!)Error loading eyes cascade\n");
 		return -1;
 	};

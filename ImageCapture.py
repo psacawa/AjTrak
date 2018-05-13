@@ -65,6 +65,10 @@ class CollectDataWidget (QGraphicsView):
             self.text.setVisible (False)
 
 
+    def ratioHead (head, eye0, eye1):
+        dim = self.scene.sceneRect().bottomRight()
+        
+
 
 class Node(QGraphicsItem):
 
