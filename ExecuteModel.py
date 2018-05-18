@@ -1,13 +1,16 @@
+#! /home/psacawa/anaconda3/bin/python
 # na razie podwaliny tylko działają
 # błędne wychwytywanie pozycji oka
 
+from PyQt5.QtWidgets import QWidget, QApplication
+from PyQt5.QtCore import Qt
 import xdo
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 # forces the code to run on CPU
 # must be executed before tf/keras imported
-import os
+import os, sys
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
@@ -19,95 +22,112 @@ from Common import *
 # nie wygląda na to, że keras ma takie możliwości
 import tensorflow as tf
 
-# run the specified model online
-def main (modelId='last',moveMouse=False):
-    targetEye = (48,32)
-    dimVector = (1,)+targetEye+(3,)
-    recurrent = True
+class ProgramWidget (QWidget):
 
-    model = getTrainedModel (modelId)
-    model.summary()
+    def __init__ (self, modelId='last',moveMouse=False, displayCascade = False):
+        self.main (modelId, moveMouse, displayCascade )
 
-    if recurrent:
-        config = model.get_config()
-        config = configForwardPass (config)
-        model.from_config (config)
+    def keyPressEvent (self, event):
+        key = event.key ()
+        if key == Qt.Key_Q:
+            print ("hello")
+            self.close ()
+
+    # run the specified model online
+    def main (self, modelId='last',moveMouse=False, displayCascade = False):
+        targetEye = (48,32)
+        dimVector = (1,)+targetEye+(3,)
+        recurrent = False
+
+        model = getTrainedModel (modelId)
         model.summary()
 
+        if recurrent:
+            config = model.get_config()
+            config = configForwardPass (config)
+            model.from_config (config)
+            model.summary()
 
-    xContext = xdo.Xdo()
-    capture = cv2.VideoCapture (0)
-    faceCascade= cv2.CascadeClassifier ("./haarcascade_frontalface_alt.xml")
-    eyeCascade = cv2.CascadeClassifier ("./haarcascade_eye_tree_eyeglasses.xml")
-    eye0Recent = LastAverage (10)
 
-    try:
-        cv2.namedWindow ("test")
-        #  cv2.namedWindow ("test2")
-        while True:
-            ch = cv2.waitKey(1) & 0xFF
-            if ch == ord ('q'):
-                break
-            image = capture.read ()[1]
-           
-            imageGrayscale = cv2.cvtColor (image, cv2.COLOR_BGR2GRAY)
-            facesFound = faceCascade.detectMultiScale (imageGrayscale, 1.3, 5) # współczynniki ?
+        xContext = xdo.Xdo()
+        capture = cv2.VideoCapture (0)
+        try:
+            faceCascade= cv2.CascadeClassifier ("./data/haarcascade_frontalface_alt.xml")
+            eyeCascade = cv2.CascadeClassifier ("./data/haarcascade_eye_tree_eyeglasses.xml")
+            eye0Recent = LastAverage (10)
+        except Exception as e:
+            print (e)
+            return
 
-            if len(facesFound) == 1:
-                #  print (facesFound)
-                x,y,w,h = facesFound[0]
-                faceInput = np.array(facesFound[0]).reshape((1,4))
-                imageFace = image[y:y+h, x:x+w]
-                faceGrayscale = imageGrayscale[y:y+h, x:x+w]
-                cv2.rectangle (image,(x,y), (x+w, y+h), (255,0,0), 2)
-                eyesFound = eyeCascade.detectMultiScale (faceGrayscale, 1.3, 5)
-                if len (eyesFound) == 2:
-                    print ("Possible face detected\t", facesFound)            
-                    e0, e1 = eyesFound[0], eyesFound[1]
-                    if e0[0] > e1[0]:
-                        e0, e1 = e1, e0
-                    e0, e1 = scale (e0, targetEye), scale (e1, targetEye)
+        try:
+            if displayCascade:
+                cv2.namedWindow ("test")
+            #  cv2.namedWindow ("test2")
+            while True:
+                ch = cv2.waitKey(1) & 0xFF
+                if ch == ord ('q'):
+                    break
+                image = capture.read ()[1]
+               
+                imageGrayscale = cv2.cvtColor (image, cv2.COLOR_BGR2GRAY)
+                facesFound = faceCascade.detectMultiScale (imageGrayscale, 1.3, 5) # współczynniki ?
 
-                    # experiment with local averaging
-                    eye0Recent.push (e0)
-                    e0 = eye0Recent.average ()
+                if len(facesFound) == 1:
+                    #  print (facesFound)
+                    x,y,w,h = facesFound[0]
+                    faceInput = np.array(facesFound[0]).reshape((1,4))
+                    imageFace = image[y:y+h, x:x+w]
+                    faceGrayscale = imageGrayscale[y:y+h, x:x+w]
+                    cv2.rectangle (image,(x,y), (x+w, y+h), (255,0,0), 2)
+                    eyesFound = eyeCascade.detectMultiScale (faceGrayscale, 1.3, 5)
+                    if len (eyesFound) == 2:
+                        #  print ("Possible face detected\t", facesFound)            
+                        e0, e1 = eyesFound[0], eyesFound[1]
+                        if e0[0] > e1[0]:
+                            e0, e1 = e1, e0
+                        e0, e1 = scale (e0, targetEye), scale (e1, targetEye)
 
-                    (x0,y0,w0,h0,x1,y1,w1,h1) = np.concatenate([e0,e1])
-                    cv2.rectangle (imageFace,(x0,y0), (x0+w0, y0+h0), (0,0,255), 2)
-                    cv2.rectangle (imageFace,(x1,y1), (x1+w1, y1+h1), (0,255,0), 2)
-                    imageEye0 = imageFace[y0:y0+h0, x0:x0+w0]
-                    imageEye1 = imageFace[y1:y1+h1, x1:x1+w1]
-                    eyeInput = np.concatenate (
-                       (imageEye0.reshape (dimVector).transpose(0, 2,1,3),
-                       imageEye1.reshape (dimVector).transpose(0, 2,1,3)),
-                       axis=3
-                    )
+                        # experiment with local averaging
+                        #  eye0Recent.push (e0)
+                        #  e0 = eye0Recent.average ()
 
-                    # forward pass
-                    modelPrediction = model.predict (x=[faceInput,eyeInput])
-                    modelPrediction = modelPrediction.flatten()
-                    mouseLoc = getMousePos ()
-                    predictionError = np.linalg.norm (modelPrediction-mouseLoc)
-                    print ("Delta: {}\tPredicted: {}\tActual: {}".format(
-                        "%.2f" % predictionError,modelPrediction,mouseLoc))
-                    if moveMouse:
-                        xContext.move_mouse (modelPrediction[0],modelPrediction[1],0)
+                        (x0,y0,w0,h0,x1,y1,w1,h1) = np.concatenate([e0,e1])
+                        cv2.rectangle (imageFace,(x0,y0), (x0+w0, y0+h0), (0,0,255), 2)
+                        cv2.rectangle (imageFace,(x1,y1), (x1+w1, y1+h1), (0,255,0), 2)
+                        imageEye0 = imageFace[y0:y0+h0, x0:x0+w0]
+                        imageEye1 = imageFace[y1:y1+h1, x1:x1+w1]
+                        eyeInput = np.concatenate (
+                           (imageEye0.reshape (dimVector).transpose(0, 2,1,3),
+                           imageEye1.reshape (dimVector).transpose(0, 2,1,3)),
+                           axis=3
+                        )
+
+                        # forward pass
+                        modelPrediction = model.predict (x=[faceInput,eyeInput])
+                        modelPrediction = modelPrediction.flatten()
+                        mouseLoc = getMousePos ()
+                        predictionError = np.linalg.norm (modelPrediction-mouseLoc)
+                        print ("Delta: {}\tPredicted: {}\tActual: {}".format(
+                            "%.2f" % predictionError,modelPrediction,mouseLoc))
+                        if moveMouse:
+                            xContext.move_mouse (modelPrediction[0],modelPrediction[1],0)
+                    else:
+                        #  print ("{} eyes found".format (len(eyesFound)))
+                        pass
+
                 else:
-                    #  print ("{} eyes found".format (len(eyesFound)))
+                    print ("{} faces found".format (len(facesFound)))
                     pass
 
-            else:
-                print ("{} faces found".format (len(facesFound)))
-                pass
+                if displayCascade:
+                    cv2.imshow ("test", image )
+                    cv2.imshow ("test2", imageEye0)
+        except Exception as e:
+            print (e)
+            pass
 
-            cv2.imshow ("test", image )
-            #  cv2.imshow ("test2", imageEye0)
-    except Exception as e:
-        print (e)
-        pass
-
-    capture.release()
-    cv2.destroyAllWindows()
+        capture.release()
+        cv2.destroyAllWindows()
 
 def configForwardPass (config):
     for i, layer in enumerate (config['layers']):
@@ -146,5 +166,11 @@ class LastAverage ():
         self.cumulative += self.data[self.accepted % self.length]
         self.accepted+=1
 
+
 if __name__ == "__main__":
     main ()
+
+def main (modelId='last',moveMouse=False, displayCascade = False):
+    app = QApplication (sys.argv)
+    widget = ProgramWidget (modelId, moveMouse, displayCascade)
+    sys.exit (app.exec_ ())

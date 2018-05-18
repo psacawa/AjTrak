@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import sys, os, cv2, numpy as np
+import sys, os, os.path as path, cv2, numpy as np
 from PyQt5.QtWidgets import (QApplication, QGraphicsView, QGraphicsScene, QGraphicsItem, 
         QDesktopWidget, QGraphicsEllipseItem, QGraphicsTextItem)
 from PyQt5.QtCore import Qt , QPointF, QRectF, QRect, QThread
@@ -180,13 +180,13 @@ class CameraThread (QThread):
                     dataFile.write (str (dataCollected) + ",")
                     dataFile.write (str (pos.x()) + ",")
                     dataFile.write (str (pos.y()) + ",")
-                    dataFile.write (str (imageFilename) + ".jpg,")
+                    dataFile.write (path.basename (imageFilename) + ".jpg,")
                     dataFile.write (str (w) + "," + str (h) + ",")
                     dataFile.write (str (x) + "," + str (y) + ",")
-                    dataFile.write (imageFilename + "_eye0.jpg,")
+                    dataFile.write (path.basename(imageFilename + "_eye0.jpg,"))
                     dataFile.write (str (w0) + "," + str (h0) + ",")
                     dataFile.write (str (x0) + "," + str (y0) + ",")
-                    dataFile.write (imageFilename + "_eye1.jpg,")
+                    dataFile.write (path.basename(imageFilename + "_eye1.jpg,"))
                     dataFile.write (str (w1) + "," + str (h1) + ",")
                     dataFile.write (str (x1) + "," + str (y1) + "")
                     dataFile.write ("\n")
@@ -207,13 +207,13 @@ class CameraThread (QThread):
         # find less folder ./data/training_dataXXX which doesn't exist
         while True:
             filename = "./data/training_data{0}/data.csv".format (str(self.numTrainingSet).zfill(3))
-            if os.path.isfile (filename):
+            if path.isfile (filename):
                 self.numTrainingSet += 1
                 continue
             else:
                 break
 
-        self.writeFolder = os.path.dirname (filename)
+        self.writeFolder = path.dirname (filename)
         print ("Saving data in ", self.writeFolder)
         os.mkdir (self.writeFolder)
         dataFile = open (filename, "w")

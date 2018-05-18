@@ -11,9 +11,12 @@ from time import time
 #  import tensorflow as tf
 
 
-def train (datasetId,modelId=2,numEpoch=100):
+def train (datasetId,modelId=2,numEpoch=100,initModel=None):
     # władować model
-    model = retrieveModel (modelId)
+    if initModel != None:
+        model = initModel
+    else:
+        model = retrieveModel (modelId)
     print (model.input_shape)
     model.summary()
     plot_model (model,  "./images/model.png")
@@ -54,7 +57,7 @@ def trainRecurrent (datasetId,modelId=3,numEpoch=100):
     print ("Labels: ",      mouseData.shape)
 
 # obtain models
-def retrieveModel (i= 1):
+def retrieveModel (i= 2):
     if i == 0:
         # wyłącznie korzystając z eye0, czyli z prawego oka
         return Sequential([
@@ -83,16 +86,19 @@ def retrieveModel (i= 1):
         eye  = Input (shape=(32,48,6,))
         face = Input (shape = (4,))
 
-        conv = eye
-        conv = Conv2D (96, 6, activation='relu', data_format="channels_last") (conv)
-        conv = MaxPooling2D () (conv)
-        conv = Conv2D (256, 3, activation='relu', data_format="channels_last") (conv)
-        conv = Dropout (rate=9.3) (conv)
-        conv = MaxPooling2D () (conv)
-        conv = Conv2D (512, 3, activation='relu', data_format="channels_last") (conv)
-        conv = Flatten ()(conv)
+        eyeTensor = eye
+        eyeTensor = Conv2D (96, 6, activation='relu', data_format="channels_last") (eyeTensor)
+        eyeTensor = MaxPooling2D () (eyeTensor)
+        eyeTensor = Conv2D (256, 3, activation='relu', data_format="channels_last") (eyeTensor)
+        eyeTensor = Dropout (rate=9.3) (eyeTensor)
+        eyeTensor = MaxPooling2D () (eyeTensor)
+        eyeTensor = Conv2D (512, 3, activation='relu', data_format="channels_last") (eyeTensor)
+        eyeTensor = Flatten ()(eyeTensor)
 
-        merged = concatenate (inputs=[face,conv], axis=1)
+        faceTensor = face
+        faceTensor = Dense (32, activation = 'relu') (faceTensor)
+
+        merged = concatenate (inputs=[faceTensor,eyeTensor], axis=1)
         #  merged = Dense (16, activation='relu') (merged)
         merged = Dense (16, activation='relu') (merged)
         #  merged = Dense (16) (merged)
