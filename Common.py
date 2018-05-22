@@ -7,7 +7,7 @@ from Xlib import display
 def getMousePos():
     # mousepos() --> (x, y) get the mouse coordinates on the screen (linux, Xlib)
     data = display.Display().screen().root.query_pointer()._data
-    return np.array((data["root_x"], data["root_y"]))
+    return (data["root_x"], data["root_y"])
 
 def getModelFilename (modelId='last'):
     folder = "./models/"

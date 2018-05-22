@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import sys, os, os.path as path, cv2, numpy as np
+import sys, os, os.path as path, cv2, numpy as np, random
 from PyQt5.QtWidgets import (QApplication, QGraphicsView, QGraphicsScene, QGraphicsItem, 
         QDesktopWidget, QGraphicsEllipseItem, QGraphicsTextItem)
 from PyQt5.QtCore import Qt , QPointF, QRectF, QRect, QThread
@@ -10,9 +10,10 @@ class CollectDataWidget (QGraphicsView):
 
     yIncr = 10
     xIncr = 20
-    frameTime = 20
     outOfBounds = False
     margin = 25
+    trainingMode = 1
+    timerLength = 20
 
     def __init__ (self):
 
@@ -30,7 +31,7 @@ class CollectDataWidget (QGraphicsView):
         self.text = QGraphicsTextItem  (text)
         self.text.setPos (100, 0)
         self.scene.addItem (self.text)
-        
+
         self.thread = CameraThread (self.node)
         self.setScene(self.scene)
         self.showFullScreen ()
@@ -39,35 +40,56 @@ class CollectDataWidget (QGraphicsView):
         dim = self.scene.sceneRect().bottomRight()
         node = self.node
         pos = node.scenePos()
-        if pos.x() > dim.x():
-            self.close()
-        elif (pos.y() > dim.y() or pos.y () <= 0) and not self.outOfBounds:
-            node.moveBy (abs(self.xIncr), 0)
-            self.yIncr *= -1  
         
-            self.outOfBounds = True
-        else:
-            node.moveBy (0, self.yIncr)
-            if self.outOfBounds:
-                self.outOfBounds = False
-        
+        if self.trainingMode == 0:
+            mousePos = getMousePos ()
+        elif self.trainingMode == 1:
+            if pos.x() > dim.x():
+                self.close()
+            elif (pos.y() > dim.y() or pos.y () <= 0) and not self.outOfBounds:
+                node.moveBy (abs(self.xIncr), 0)
+                self.yIncr *= -1  
+            
+                self.outOfBounds = True
+            else:
+                node.moveBy (0, self.yIncr)
+                if self.outOfBounds:
+                    self.outOfBounds = False
+        elif self.trainingMode == 2:
+            print ("Hello")
+            radius = self.node.r
+            x = random.randint (radius, dim.x()-radius)
+            y = random.randint (radius, dim.y()-radius)
+            print (x,y)
+            node.setPos (x,y)
+            
 
     def keyPressEvent (self, event):
         key = event.key ()
         if key == Qt.Key_Q:
             self.thread.terminate = True
             self.close()
+        elif key == Qt.Key_0:
+            self.trainingMode = 0
+            self.timerLength = 50
+        elif key == Qt.Key_1:
+            print ("Training mode 1 selected")
+            self.trainingMode = 1
+            self.timerLength = 20
+        elif key == Qt.Key_2:
+            print ("Training mode 2 selected")
+            self.trainingMode = 2
+            self.timerLength = 2000
         elif key == Qt.Key_V:
             self.node.setVisible (not self.node.isVisible())
         elif key == Qt.Key_Space:
-            self.startTimer (self.frameTime)
+            self.startTimer (self.timerLength)
             self.thread.start()
             self.text.setVisible (False)
 
-
-    def ratioHead (head, eye0, eye1):
-        dim = self.scene.sceneRect().bottomRight()
-        
+    # po kiego czorta ?
+    #  def ratioHead (head, eye0, eye1):
+    #      dim = self.scene.sceneRect().bottomRight()
 
 
 class Node(QGraphicsItem):
@@ -200,7 +222,9 @@ class CameraThread (QThread):
                 print ("{} faces found".format (len(facesFound)))
                 pass
 
+        print ("end of loop")
         pass
+
 
     def initTraining (self):
 
@@ -255,4 +279,10 @@ def main ():
 
 
 if __name__ == "__main__":
+
+    # wdrożyć opcję dla poziomego skanowania w pierwszej kolejności
+    args = sys.argv
+    if "-h" in args:
+        pass
+
     main ()

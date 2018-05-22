@@ -5,10 +5,11 @@
 import xdo
 import numpy as np
 import cv2
+import curses
 import matplotlib.pyplot as plt
 # forces the code to run on CPU
 # must be executed before tf/keras imported
-import os, sys
+import os, sys, signal
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
@@ -20,8 +21,8 @@ from Common import *
 # nie wygląda na to, że keras ma takie możliwości
 import tensorflow as tf
 
-    # run the specified model online
-def main (modelId='last',moveMouse=False, displayCascade = False):
+    # run the specified model in an online fashion
+def AjTrak (modelId='last',moveMouse=False, displayCascade = False):
     targetEye = (48,32)
     dimVector = (1,)+targetEye+(3,)
     recurrent = False
@@ -51,9 +52,11 @@ def main (modelId='last',moveMouse=False, displayCascade = False):
             cv2.namedWindow ("test")
         #  cv2.namedWindow ("test2")
         while True:
-            ch = cv2.waitKey(1) & 0xFF
-            if ch == ord ('q'):
-                break
+            # wyjście z głównej pętli wdrażana przez openCV - nie działa bez okien...
+            #  ch = cv2.waitKey(1) & 0xFF
+            #  if ch == ord ('q'):
+            #      break
+
             image = capture.read ()[1]
            
             imageGrayscale = cv2.cvtColor (image, cv2.COLOR_BGR2GRAY)
@@ -142,6 +145,24 @@ class LastAverage ():
         self.cumulative += self.data[self.accepted % self.length]
         self.accepted+=1
 
+def sigintHandler (signal, frame):
+    print ("Exiting")
+    sys.exit (0)
 
 if __name__ == "__main__":
-    main ()
+
+    # handle command line arguemnts
+    args = sys.argv
+    modelId = "last"
+    moveMouse = False
+    displayCascade  = False
+    if "-m" in args:
+        moveMouse = True
+    if "-f" in args:
+        displayCascade = True
+
+    # register signal handler for SIGINT quit - temporary
+    signal.signal (signal.SIGINT, sigintHandler)
+
+    # run
+    AjTrak(modelId, moveMouse, displayCascade)
